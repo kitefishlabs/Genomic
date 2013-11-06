@@ -20,7 +20,7 @@ class NRTOSCParser3:
 		elif type(val) == type(1):
 			return struct.pack('!i', val)
 		elif type(val) == type(0.2):
-			return struct.pack('!f', float(val))
+			return struct.pack('!f', val)
 
 	def processAndWriteFile(self, score, output):
 		header = bytearray("\x00\x00\x00$#bundle\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10/g_new\x00\x00,i\x00\x00\x00\x00\x00\x01\x00\x00\x00$#bundle\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10/g_new\x00\x00,i\x00\x00\x00\x00\x00\x01")
