@@ -3,4 +3,4 @@ _*
 *.pyc
 snd/md/*
 snd/osc/*
-
+snd/out/*
