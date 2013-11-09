@@ -14,23 +14,16 @@ import scipy.signal
 #
 # call next to actually make the random selection
 #
-class WeightedRandomGenerator(object):
-	"""
-	mu - should be 0!
-	stdev - set very lo (at most 1/4 of the desired range)
+class RandomGenerator_8Bit(object):
 
-	"""
-	def __init__(self, mn=0.0, stdev=1.0, lo=0.0, hi=1.0, initval=0):
-		self.mean = mn
-		self.stdev = stdev
-		self.lo = lo
-		self.hi = hi
-		self.val = initval
+	def __init__(self, initval=-1):
+		if initval >= 0:
+			self.val = initval
+		else:
+			self.val = random.randint(0,128)
 		
 	def next(self, scale=1.0):
-		rnd = random.gauss(self.mean, self.stdev)
-		self.val = min(max((self.val+rnd), self.lo), self.hi)
-		return self.val
+		self.val = random.randint(0,128)
 
 	def __call__(self): return self.next()
 
@@ -38,6 +31,7 @@ class WeightedRandomGenerator(object):
 # helper function
 def midi2hz(m): return pow(2.0, (m/12.0))
 
+# slot assignments for sigmaSynth
 ALPHA = 0
 C_DELAY = 1
 BETA = 2
@@ -47,7 +41,7 @@ MS_BINS = 5
 
 class GenomicExplorer:
 
-	def __init__(self, anchor, sfilename, size=10, start_state=[1.0, 0.0, 1.0, 1.0, 1.0, 0.0]):
+	def __init__(self, anchor, sfilename, size=10): #, start_state=[1.0, 0.0, 1.0, 1.0, 1.0, 0.0]
 				
 		self.anchor = anchor
 		self.sfpath = anchor + '/snd/' + sfilename
@@ -58,49 +52,78 @@ class GenomicExplorer:
 			self.rate = f.getframerate()
 			self.dur = self.frames/float(self.rate)
 		
-		self.mutation_prob = 0.01
-		self.depth = 25
+		self.mutation_prob = 0.09
+		#self.xover_prob = 0.05
+		self.depth = 10
  		# 'alpha', 'c_delay', 'beta', 'd_mult', 'gamma', 'ms_bins'
 		self.parser = NRTOSCParser3.NRTOSCParser3(anchor=self.anchor)
 		self.rawtable, self.rawmaps, self.dists = dict(), dict(), dict()
 
-		self.init_population(size=size, starter=start_state)
+		self.init_population(size=size)
 
 	
-	def init_population(self, size, starter=None):
+	def init_population(self, size):
 		self.population = []
 		for n in range(size):
-  			start = [random.randrange(500, 1000)*0.001, random.randrange(0,50)*0.001, random.randrange(500, 1000)*0.001, random.randrange(100,1000)*0.01, random.randrange(500, 1000)*0.001, random.randrange(0,5000)*0.01]
- 			self.population += [Genome(start)]
+  			#start = [random.randrange(500, 1000)*0.001, random.randrange(0,50)*0.001, random.randrange(500, 1000)*0.001, random.randrange(100,1000)*0.01, random.randrange(500, 1000)*0.001, random.randrange(0,5000)*0.01]
+ 			self.population += [Genome()]
 # 			self.population += [Genome(starter)]
-		self.population[0] = Genome(starter)
+		self.population[0] = Genome()
 		self.analyze_individual(0)
 		self.activate_raw_data(0)
-		self.compare_all_individuals(resamp_flag=False)
+		self.compare_all_individuals(aflag=True)
 			
-	def mutate(self):
-		
+	def mutate_pop(self):
+		for indiv in range(len(self.population)):
 		if random.random() < self.mutation_prob:
-			indiv = random.randint(1, len(self.population)-1)
+			print "indiv: ", indiv
 			self.population[ indiv ].mutate()
-			self.population[ indiv ].edits += 1
-			self.analyze_individual( indiv )
-			self.activate_raw_data( indiv )
-# 			self.compare_individual_chi_squared( indiv )
-			self.compare_individual( indiv )
+			self.do_update_cascade(indiv)
+			
+# 	def crossover(self):
+# 		if random.random() < self.xover_prob:
+# 			indivA = random.randint(1, len(self.population)-1)
+# 			indivB = random.randint(1, len(self.population)-1)
+# 			pos = random.randint(1,4) * 8
+# 			print 'pos: ', pos
+# 			fromA = self.population[ indivA ].binarystring[:pos]
+# 			fromB = self.population[ indivB ].binarystring[pos:]
+# 			print 'BEFORE: '
+# 			print self.population[ indivA ].binarystring
+# 			print self.population[ indivB ].binarystring
+# 			self.population[ indivA ].xover_sub(pos, fromB, 1)
+# 			self.population[ indivB ].xover_sub(pos, fromA, 0)
+# 			print 'AFTER: '
+# 			print self.population[ indivA ].binarystring
+# 			print self.population[ indivB ].binarystring
+# 			print self.population[ indivA ].values
+# 			print self.population[ indivB ].values
+# 			self.do_update_cascade(indivA)
+# 			self.do_update_cascade(indivB)
+			
+	def do_update_cascade(self, index, clearedits=False):
+		if clearedits is True:
+			self.population[ index ].edits = 0
+		else:
+			self.population[ index ].edits += 1
+		self.analyze_individual( index )
+		self.activate_raw_data( index )
+		self.compare_individual_chi_squared( indiv )
+# 		self.compare_individual( index )
 	
 	def mate(self, a, b, kill_index):
 		
-		cut = random.randint(0,5)
-		offspring = None
+# 		cut = random.randint(0,5)
+		offspring = None		
 		
 		if random.random() < 0.5:
 			offspring = self.population[a].values[:]
+			
 		else:
 			offspring = self.population[b].values[:]
 		
 		# basic gene selection from 2 parents
-		for i in range(6):	
+		for i in range(6):
 			if random.random() < 0.5:
 				offspring[i] = self.population[a].values[i]
 			else:
@@ -108,10 +131,7 @@ class GenomicExplorer:
 		
 		self.population[kill_index] = Genome(offspring)
 		
-		self.analyze_individual(kill_index)
-		self.activate_raw_data(kill_index)
-# 		self.compare_individual_chi_squared( indiv )
-		self.compare_individual(kill_index)
+		self.do_update_cascade(kill_index, True)
 	
 	def sort_by_distances(self, depth):
 		sorted_dists = [[k, self.dists[k], self.population[k].age, self.population[k].edits] for k in sorted(self.dists.keys())]
@@ -139,7 +159,7 @@ class GenomicExplorer:
 		sc.quit()
 		for iter in range(iters):
 			self.age_pop()
-			self.mutate()
+			self.mutate_pop()
 # 			self.crossover()
 			if (iter%20)==0:
 				print self.population[0].age
@@ -152,19 +172,18 @@ class GenomicExplorer:
 	def start_sc(self):
 		try:
 			sc.start(verbose=1, spew=1, startscsynth=1)
-		# in case we've already started the synth
-		except OSError:
+		except OSError: # in case we've already started the synth
 			print 'QUIT!'
 			sc.quit()
 		print 'sfpath: ', self.sfpath
- 		self.bnum = sc.loadSnd(self.sfpath, wait=False)
- 		print 'bnum: ', self.bnum
-
-# |outbus=20, srcbufNum, start=0.0, dur=1.0, transp=1.0, c_delay=0.0, c_decay=0.0, d_mult=1.0, d_amp=0.7, ms_bins=0, alpha=1, beta=1, gamma=1|
-
+		self.bnum = sc.loadSnd(self.sfpath, wait=False)
+		print 'bnum: ', self.bnum
+		return 1
+	
+	# |outbus=20, srcbufNum, start=0.0, dur=1.0, transp=1.0, c_delay=0.0, c_decay=0.0, d_mult=1.0, d_amp=0.7, ms_bins=0, alpha=1, beta=1, gamma=1|
 	def play_genome(self, index):
 		
-		vals = self.population[index].values
+		vals = self.population[index].realvalues
 		if vals[C_DELAY] < 1.0:
 			cdelay = 0.0
 		else:
@@ -194,7 +213,7 @@ class GenomicExplorer:
 #		oscpath = os.path.join(self.anchor, 'snd', 'osc', `index`, (os.path.splitext(self.filename)[0] + '_sigmaAnalyzer.osc'))
 # 		mdpath = os.path.join(self.anchor, 'snd', 'md', `index`, self.filename)
 		
-		vals = self.population[index].values
+		vals = self.population[index].realvalues
 		if vals[C_DELAY] < 1.0:
 			cdelay = 0.0
 		else:
@@ -235,7 +254,7 @@ class GenomicExplorer:
 	
 	def render_individual(self, index):
 	
-		vals = self.population[index].values
+		vals = self.population[index].realvalues
 		if vals[C_DELAY] < 1.0:
 			cdelay = 0.0
 		else:
@@ -285,28 +304,27 @@ class GenomicExplorer:
 	COMPARE_ALL_INDIVIDUALS:
 		... to individual in slot 0!
 	"""
-	def compare_all_individuals(self, resamp_flag=True):
+	def compare_all_individuals(self, aflag=False):
 		for i in range(1, len(self.population)):
- 			if resamp_flag:
+ 			if aflag:
  				self.analyze_individual(i)
 				self.activate_raw_data(i)
 # 			self.compare_individual_chi_squared(i)
 			self.compare_individual(i)
+		print self.dists
 		return self.dists
-
 	"""
 	COMPARE_INDIVIDUAL:
 		... to individual in the slot that is stipulated by the arg zeroindex!
 		-	by convention, we should usually put what we are comparing to in slot 0
 	"""
-	
 	def compare_individual(self, index, zeroindex=0):
 		i_length = self.rawmaps[index].shape[0]
 		zr0_length = self.rawmaps[zeroindex].shape[0]
 		print i_length, ' | ', zr0_length
 
 		# i1_length = self.rawmaps[index-1].shape[0] ## <--- NEIGHBOR comparison
-		print i_length, ' | ', i1_length, ' | ', zr0_length
+		# print i_length, ' | ', i1_length, ' | ', zr0_length
 
 		# based on length comparison, resample the mutated individuals so that they are same length as the zeroth individual (that does not mutate)
 		# if indiv. is longer, resample indiv., take abs. diff., sum, div. by length
@@ -320,7 +338,9 @@ class GenomicExplorer:
 		# otherwise, take abs. diff., sum, div. by length, then do same comparison with "neighbor"
 # 			print 'ZERO'
 			zero_dist = float(np.sum(np.abs(self.rawmaps[index][:,1:] - self.rawmaps[0][:,1:]))) / float(zr0_length)
-			power_dist = float(np.sum(self.rawmaps[index][:,0] - self.rawmaps[0][:,0])) / float(zr0_length)
+			
+			### CHECK THIS DISTANCE CALCULATION!!!!!!
+			power_dist = float(np.sqrt(np.sum(np.abs(self.rawmaps[index][:,0] - self.rawmaps[0][:,0])))) / float(zr0_length)
 			print (zero_dist, (power_dist * 10.0))
 			zero_dist += (power_dist * 10.0)
 		
@@ -372,31 +392,98 @@ class GenomicExplorer:
 
 class Genome:
 
-	def __init__(self, starter):
-
-		print 'starter: ', starter
+	def __init__(self, values=None, slotranges=[[0.5,1.0],[0.0,0.05],[0.5,1.0],[1.0,10.],[0.5,1.0],[0.0,50.]]):
 		
-		self.values = [starter[ALPHA], starter[C_DELAY], starter[BETA], starter[D_MULT], starter[GAMMA], starter[MS_BINS]]
-		self.tratio	= 1.0		# in Hertz!!!
+		# """
+		# [[0.5,1.0],[0.0,0.05],[0.5,1.0],[1.0,10.],[0.5,1.0],[0.0,50.]]
+		# """
 		
-		self.generators = [
-			WeightedRandomGenerator(0.0, 	0.1, 	0.5,	1.0,	self.values[ALPHA]),
-			WeightedRandomGenerator(0.0, 	0.0025,	0.0, 	0.05,	self.values[C_DELAY]),
-			WeightedRandomGenerator(0.0, 	0.05, 	0.5,	1.0,	self.values[BETA]),
-			WeightedRandomGenerator(0.0, 	0.5, 	1.0,	10.,	self.values[D_MULT]),
-			WeightedRandomGenerator(0.0, 	0.05, 	0.5,	1.0,	self.values[GAMMA]),
-			WeightedRandomGenerator(0.0, 	2.5, 	0.0,	50.,	self.values[MS_BINS])
-		]
+		self.tratio	= 1.0		# CHECK THIS... WHY IS IT HERE/in Hertz!!! ???
+		
+		self.boundaries = slotranges
+		self.generators = [RandomGenerator_8Bit(-1) for n in range(6)] ### CONSTANT WARNING
+		#StaticGenerator_8Bit(VAL) ???
+		
+		if values is None:
+			self.values = [gen.val for gen in self.generators]
+		else:
+			self.values = values
+		self.bitlength = len(self.values) * 8
+		self.binarystring = vals_to_binarystring(self.values)
+# 		print self.values
+# 		print type(self.values[0])
+		self.realvalues = [lininterp(val,self.boundaries[i]) for i,val in enumerate(self.values)]
+		
 		self.age = 0
 		self.edits = 0
 	
 	def __repr__(self):
-		return "%9i/%9i || %.6f|%.6f|%.6f|%.6f|%.6f|%.6f" % (self.age, self.edits, self.values[ALPHA], self.values[C_DELAY], self.values[BETA], self.values[D_MULT], self.values[GAMMA], self.values[MS_BINS])
+		print tuple(self.values)
+		print ((self.age, self.edits) + tuple(self.values) + tuple(self.binarystring))
+		return "%9i/%9i || %.6f|%.6f|%.6f|%.6f|%.6f|%.6f" % ((self.age, self.edits) + tuple(self.realvalues)) # + tuple(self.binarystring)
 	
 	def mutate(self):
-		choice = random.randint(0,5)
+		pos = random.randint(0,(self.bitlength-1))
+		# flip bit
+		print abs(1 - int(self.binarystring[pos],2))
+		self.binarystring = substitute_char_in_string(self.binarystring, pos, abs(1 - int(self.binarystring[pos],2)))
+		# recalc binary string
+		self.values = binarystring_to_vals(self.binarystring)
+		print "values: ", self.values
+		self.realvalues = [lininterp(val,self.boundaries[i]) for i,val in enumerate(self.values)]
+	
+# 	def xover_sub(self, pos, incomingSeq, headortail=0):
+# 		if headortail == 0:
+# 			print '<<>> ', self.binarystring
+# 			print '<<>> ', pos
+# 			print '<<>> ', incomingSeq
+# 			self.binarystring = incomingSeq[:pos] + self.binarystring[pos:]
+# 		else:
+# 			print '<<>> ', self.binarystring
+# 			print '<<>> ', pos
+# 			print '<<>> ', incomingSeq
+# 			self.binarystring = self.binarystring[:pos] + incomingSeq[:(len(self.binarystring)-pos)]
+# 		# recalc binary string
+# 		print '==== ', self.binarystring
+# 		self.values = binarystring_to_vals(self.binarystring)
+# 		print "values: ", self.values
+# 		self.realvalues = [lininterp(val,self.boundaries[i]) for i,val in enumerate(self.values)]
 
-		self.values[choice] = self.generators[choice].next()
+
+def lininterp(val,bounds=[0.,1.]):
+	return (((val/128.0)*(bounds[1]-bounds[0]))+bounds[0])
+
+def substitute_char_in_string(s, p, c):
+	l = list(s)
+	l[p] = str(c)
+	return "".join(l)
+
+# def substitute_string_head(s, p, snew):
+# 	s1 = snew[:]
+# 	print '++++ ', s1
+# 	s2 = s[p:]
+# 	print '++++ ', s2
+# 	return (s1 + s2)[:len(s)]
+# 
+# def substitute_string_tail(s, p, snew):
+# 	s1 = s[:p]
+# 	print '==== ', s1
+# 	print len(s)
+# 	print p
+# 	s2 = snew[:(len(s)-p)]
+# 	print '==== ', s2
+# 	return (s1 + s2)[:len(s)]
+
+def vals_to_binarystring(vals = [120, 32, 2, 101, 99]):
+	return ''.join((("{0:08b}".format(val)) for val in vals))
+
+# never a '0bXXX' string!
+def binarystring_to_vals(binstring):
+	mystring = binstring[:]
+	length = len(mystring) / 8 # ignore the last digits if it doesn't chunk into 8-item substrings
+	res = []
+# 	print mystring[(n*8):((n+1)*8)]
+	return [int(mystring[(n*8):((n+1)*8)], 2) for n in range(length)]
 	
 
 # if __name__=='__main__':
