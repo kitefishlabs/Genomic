@@ -74,11 +74,11 @@ class GenomicExplorer:
 		self.compare_all_individuals(aflag=True)
 			
 	def mutate_pop(self):
-		for indiv in range(len(self.population)):
-		if random.random() < self.mutation_prob:
-			print "indiv: ", indiv
-			self.population[ indiv ].mutate()
-			self.do_update_cascade(indiv)
+		for indiv in range(1, len(self.population)):
+			if random.random() < self.mutation_prob:
+				print "indiv: ", indiv
+				self.population[ indiv ].mutate()
+				self.do_update_cascade(indiv)
 			
 # 	def crossover(self):
 # 		if random.random() < self.xover_prob:
@@ -108,7 +108,7 @@ class GenomicExplorer:
 			self.population[ index ].edits += 1
 		self.analyze_individual( index )
 		self.activate_raw_data( index )
-		self.compare_individual_chi_squared( indiv )
+		self.compare_individual_chi_squared( index )
 # 		self.compare_individual( index )
 	
 	def mate(self, a, b, kill_index):
@@ -309,8 +309,8 @@ class GenomicExplorer:
  			if aflag:
  				self.analyze_individual(i)
 				self.activate_raw_data(i)
-# 			self.compare_individual_chi_squared(i)
-			self.compare_individual(i)
+ 			self.compare_individual_chi_squared(i)
+#			self.compare_individual(i)
 		print self.dists
 		return self.dists
 	"""
@@ -425,7 +425,7 @@ class Genome:
 	def mutate(self):
 		pos = random.randint(0,(self.bitlength-1))
 		# flip bit
-		print abs(1 - int(self.binarystring[pos],2))
+		print 'bit flipped to: ', abs(1 - int(self.binarystring[pos],2))
 		self.binarystring = substitute_char_in_string(self.binarystring, pos, abs(1 - int(self.binarystring[pos],2)))
 		# recalc binary string
 		self.values = binarystring_to_vals(self.binarystring)
