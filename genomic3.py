@@ -76,7 +76,7 @@ class GenomicExplorer:
 		self.population[0] = Genome(starter)
 		self.analyze_individual(0)
 		self.activate_raw_data(0)
-		self.compare_all_individuals(resamp_flag=False)
+		self.compare_all_individuals(aflag=True)
 			
 	def mutate(self):
 		
@@ -285,9 +285,9 @@ class GenomicExplorer:
 	COMPARE_ALL_INDIVIDUALS:
 		... to individual in slot 0!
 	"""
-	def compare_all_individuals(self, resamp_flag=True):
+	def compare_all_individuals(self, aflag=False):
 		for i in range(1, len(self.population)):
- 			if resamp_flag:
+ 			if aflag:
  				self.analyze_individual(i)
 				self.activate_raw_data(i)
 # 			self.compare_individual_chi_squared(i)
