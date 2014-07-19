@@ -4,7 +4,7 @@ import NRTOSCParser3
 
 import numpy as np
 import scipy.signal
-
+import matplotlib.pyplot as plt
 
 # generator class for weighted random numbers
 #
@@ -41,7 +41,7 @@ MS_BINS = 5
 
 class GenomicExplorer:
 
-	def __init__(self, anchor, sfilename, size=10): #, start_state=[1.0, 0.0, 1.0, 1.0, 1.0, 0.0]
+	def __init__(self, anchor, sfilename, size=10, margin=10, report_interval=20, mut_prob=0.02): #, start_state=[1.0, 0.0, 1.0, 1.0, 1.0, 0.0]
 				
 		self.anchor = anchor
 		self.sfpath = anchor + '/snd/' + sfilename
@@ -52,23 +52,22 @@ class GenomicExplorer:
 			self.rate = f.getframerate()
 			self.dur = self.frames/float(self.rate)
 		
-		self.mutation_prob = 0.09
-		#self.xover_prob = 0.05
-		self.depth = 10
+		self.mutation_prob = mut_prob
+		self.depth = margin
  		# 'alpha', 'c_delay', 'beta', 'd_mult', 'gamma', 'ms_bins'
 		self.parser = NRTOSCParser3.NRTOSCParser3(anchor=self.anchor)
-		self.rawtable, self.rawmaps, self.dists, self.pool_means, self.pool_stdevs = dict(), dict(), dict(), dict(), dict(), dict()
+		self.rawtable, self.rawmaps, self.dists, self.pool_means, self.pool_stdevs = dict(), dict(), dict(), dict(), dict()
+
+		self.reporting_interval = report_interval
 
 		self.init_population(size=size)
 
-	
 	def init_population(self, size):
 		self.population = []
 		for n in range(size):
-  			#start = [random.randrange(500, 1000)*0.001, random.randrange(0,50)*0.001, random.randrange(500, 1000)*0.001, random.randrange(100,1000)*0.01, random.randrange(500, 1000)*0.001, random.randrange(0,5000)*0.01]
- 			self.population += [Genome()]
-# 			self.population += [Genome(starter)]
-		self.population[0] = Genome()
+#  			self.population += [Genome()] #random seed
+ 			self.population += [Genome(values=[0,0,0,0,0,0])] #random seed
+		self.population[0] = Genome(values=[0,0,0,0,0,0])
 		self.analyze_individual(0)
 		self.activate_raw_data(0)
 		self.compare_all_individuals(aflag=True)
@@ -92,7 +91,6 @@ class GenomicExplorer:
 	
 	def mate(self, a, b, kill_index):
 		
-# 		cut = random.randint(0,5)
 		offspring = None		
 		
 		if random.random() < 0.5:
@@ -140,9 +138,13 @@ class GenomicExplorer:
 			self.age_pop()
 			self.mutate_pop()
 # 			self.crossover()
-			if (iter%20)==0:
+			if (iter%self.reporting_interval)==0:
 				print self.population[0].age
 				self.reproduce(self.depth)
+				self.collect_population_data()
+				res = self.check_for_stopping_conditions(5)
+				if (res == 0) and (self.population[0].age > 20):
+					return
 	
 	def print_all_individuals(self):
 		print '== pop ==========================='
@@ -229,8 +231,6 @@ class GenomicExplorer:
 # 			print 'num frames: ', num_frames
 			self.rawtable[index] = (mdpath, num_frames)
 		
-# 		print self.rawtable
-	
 	def render_individual(self, index):
 	
 		vals = self.population[index].realvalues
@@ -297,6 +297,43 @@ class GenomicExplorer:
 		... to individual in the slot that is stipulated by the arg zeroindex!
 		-	by convention, we should usually put what we are comparing to in slot 0
 	"""
+# 	def compare_individual(self, index, zeroindex=0):
+# 		i_length = self.rawmaps[index].shape[0]
+# 		zr0_length = self.rawmaps[zeroindex].shape[0]
+# 		print i_length, ' | ', zr0_length
+# 
+# 		# i1_length = self.rawmaps[index-1].shape[0] ## <--- NEIGHBOR comparison
+# 		# print i_length, ' | ', i1_length, ' | ', zr0_length
+# 
+# 		# based on length comparison, resample the mutated individuals so that they are same length as the zeroth individual (that does not mutate)
+# 		# if indiv. is longer, resample indiv., take abs. diff., sum, div. by length
+# 		if zr0_length < i_length:
+# 			zero_dist = float(np.sum(np.abs(scipy.signal.signaltools.resample(self.rawmaps[index], zr0_length, window='hanning') - self.rawmaps[0]))) / float(zr0_length)
+# # 			print self.dists[index]
+# 		# if zeroth indiv. is longer, resample zeroth indiv., take abs. diff., sum, div. by length, then do same comparison with "neighbor"
+# 		elif i_length < zr0_length:
+# 			zero_dist = float(np.sum(np.abs(self.rawmaps[index] - scipy.signal.signaltools.resample(self.rawmaps[0], float(i_length), window='hanning')))) / float(i_length)
+# 		else:
+# 		# otherwise, take abs. diff., sum, div. by length, then do same comparison with "neighbor"
+# # 			print 'ZERO'
+# 			zero_dist = float(np.sum(np.abs(self.rawmaps[index][:,1:14] - self.rawmaps[0][:,1:14]))) / float(zr0_length)
+# 			
+# 			### CHECK THIS DISTANCE CALCULATION!!!!!!
+# 			power_dist = float(np.sqrt(np.sum(np.abs(self.rawmaps[index][:,0] - self.rawmaps[0][:,0])))) / float(zr0_length)
+# 			print (zero_dist, (power_dist * 10.0))
+# 			zero_dist += (power_dist * 10.0)
+# 		
+# # 		if i1_length < i_length:
+# # 			neighbor_dist = float(np.sum(np.abs(scipy.signal.signaltools.resample(self.rawmaps[index-1], i_length, window='hanning') - self.rawmaps[index]))) / float(i_length)
+# # 		elif i_length < i1_length:
+# # 			neighbor_dist = float(np.sum(np.abs(self.rawmaps[index-1] - scipy.signal.signaltools.resample(self.rawmaps[index], i1_length, window='hanning')))) / float(i1_length)
+# # 		else:
+# # 			print 'ZERO-NEIGHBOR'
+# # 			neighbor_dist = float(np.sum(np.abs(self.rawmaps[index-1] - scipy.signal.signaltools.resample(self.rawmaps[index], i1_length, window='hanning')))) / float(i1_length)
+# 		
+# # 		self.dists[index] = zero_dist + neighbor_dist
+# 		self.dists[index] = zero_dist
+# 	
 	def compare_individual(self, index, zeroindex=0):
 		i_length = self.rawmaps[index].shape[0]
 		zr0_length = self.rawmaps[zeroindex].shape[0]
@@ -308,32 +345,18 @@ class GenomicExplorer:
 		# based on length comparison, resample the mutated individuals so that they are same length as the zeroth individual (that does not mutate)
 		# if indiv. is longer, resample indiv., take abs. diff., sum, div. by length
 		if zr0_length < i_length:
-			zero_dist = float(np.sum(np.abs(scipy.signal.signaltools.resample(self.rawmaps[index], zr0_length, window='hanning') - self.rawmaps[0]))) / float(zr0_length)
-# 			print self.dists[index]
+			zero_dist = float(np.sum(np.abs(scipy.signal.signaltools.resample(self.rawmaps[index][:,1:13], zr0_length, window='hanning') - self.rawmaps[0][:,1:13]))) / float(zr0_length)
+			total_dist = (float(np.sqrt(np.sum(np.abs(self.rawmaps[index][:zr0_length,0] - self.rawmaps[0][:zr0_length,0])))) / float(zr0_length)) + zero_dist
 		# if zeroth indiv. is longer, resample zeroth indiv., take abs. diff., sum, div. by length, then do same comparison with "neighbor"
 		elif i_length < zr0_length:
-			zero_dist = float(np.sum(np.abs(self.rawmaps[index] - scipy.signal.signaltools.resample(self.rawmaps[0], float(i_length), window='hanning')))) / float(i_length)
+			zero_dist = float(np.sum(np.abs(self.rawmaps[index][:,1:13] - scipy.signal.signaltools.resample(self.rawmaps[0][:,1:13], float(i_length), window='hanning')))) / float(i_length)
+			total_dist = (float(np.sqrt(np.sum(np.abs(self.rawmaps[index][:i_length,0] - self.rawmaps[0][:i_length,0])))) / float(i_length)) + zero_dist
 		else:
-		# otherwise, take abs. diff., sum, div. by length, then do same comparison with "neighbor"
-# 			print 'ZERO'
-			zero_dist = float(np.sum(np.abs(self.rawmaps[index][:,1:14] - self.rawmaps[0][:,1:14]))) / float(zr0_length)
-			
-			### CHECK THIS DISTANCE CALCULATION!!!!!!
-			power_dist = float(np.sqrt(np.sum(np.abs(self.rawmaps[index][:,0] - self.rawmaps[0][:,0])))) / float(zr0_length)
-			print (zero_dist, (power_dist * 10.0))
-			zero_dist += (power_dist * 10.0)
+		# otherwise, take abs. diff., sum, div. by length, then do amp 
+			zero_dist = float(np.sum(np.abs(self.rawmaps[index][:,:13] - self.rawmaps[0][:,:13]))) / float(zr0_length)
+			total_dist = float(np.sqrt(np.sum(np.abs(self.rawmaps[index][:,0] - self.rawmaps[0][:,0])))) / float(zr0_length) + zero_dist
 		
-# 		if i1_length < i_length:
-# 			neighbor_dist = float(np.sum(np.abs(scipy.signal.signaltools.resample(self.rawmaps[index-1], i_length, window='hanning') - self.rawmaps[index]))) / float(i_length)
-# 		elif i_length < i1_length:
-# 			neighbor_dist = float(np.sum(np.abs(self.rawmaps[index-1] - scipy.signal.signaltools.resample(self.rawmaps[index], i1_length, window='hanning')))) / float(i1_length)
-# 		else:
-# 			print 'ZERO-NEIGHBOR'
-# 			neighbor_dist = float(np.sum(np.abs(self.rawmaps[index-1] - scipy.signal.signaltools.resample(self.rawmaps[index], i1_length, window='hanning')))) / float(i1_length)
-		
-# 		self.dists[index] = zero_dist + neighbor_dist
-		self.dists[index] = zero_dist
-	
+		self.dists[index] = total_dist
 	
 	def compare_individual_chi_squared(self, index):
 		i_length = self.rawmaps[index].shape[0]
@@ -375,8 +398,21 @@ class GenomicExplorer:
 			data = np.array(self.rawmaps[indiv][:,1:14])
 			diffs += [np.sum(np.abs(data - zero_data))]
 		diffs = np.array(diffs)
-		self.pool_means[self.age] = np.mean(diffs)
-		self.pool_stdevs[self.age] = np.std(diffs)
+		age0 = self.population[0].age
+		age1 = self.population[1].age
+		print 'ages: ', age0, '|', age1
+		self.pool_means[age1] = np.mean(diffs)
+		self.pool_stdevs[age1] = np.std(diffs)
+
+	def check_for_stopping_conditions(self, max_gens):
+		stdevs_skeys = sorted(self.pool_stdevs.keys())
+		stdevs_sorted = [self.pool_stdevs[key] for key in stdevs_skeys]
+		lastNstdevs = stdevs_sorted[(-1*max_gens):]
+		print ">>>>>>>>>>>>>>>>>STOP??? ::: ", (abs(max(lastNstdevs) - min(lastNstdevs)) /  max_gens)
+		if (abs(max(lastNstdevs) - min(lastNstdevs)) /  max_gens) < 0.1:
+			return 0
+		else:
+			return 1
 
 
 class Genome:
@@ -384,6 +420,7 @@ class Genome:
 	def __init__(self, values=None, slotranges=[[0.5,1.0],[0.0,0.05],[0.5,1.0],[1.0,10.],[0.5,1.0],[0.0,50.]]):
 		
 		# """
+		# 'alpha',   'c_delay', 'beta',   'd_mult', 'gamma',  'ms_bins'
 		# [[0.5,1.0],[0.0,0.05],[0.5,1.0],[1.0,10.],[0.5,1.0],[0.0,50.]]
 		# """
 		
@@ -447,23 +484,24 @@ def substitute_char_in_string(s, p, c):
 	l[p] = str(c)
 	return "".join(l)
 
-# def substitute_string_head(s, p, snew):
-# 	s1 = snew[:]
-# 	print '++++ ', s1
-# 	s2 = s[p:]
-# 	print '++++ ', s2
-# 	return (s1 + s2)[:len(s)]
-# 
-# def substitute_string_tail(s, p, snew):
-# 	s1 = s[:p]
-# 	print '==== ', s1
-# 	print len(s)
-# 	print p
-# 	s2 = snew[:(len(s)-p)]
-# 	print '==== ', s2
-# 	return (s1 + s2)[:len(s)]
+def plot_generational_means_stdevs(pool_means, pool_stdevs, poolsize, margin, mutrate):
+	
+	fig, axs = plt.subplots(nrows=1, ncols=1) #, sharex=True, sharey=True)
+	
+	timepoints = sorted(pool_means.keys())
+	means = np.array([pool_means[tp] for tp in timepoints])
+	stdevs = np.array([pool_stdevs[tp] for tp in timepoints])
 
-def vals_to_binarystring(vals = [120, 32, 2, 101, 99]):
+	lower_stdevs = np.where(np.subtract(means, stdevs)>0, stdevs, 0)
+
+	axs.errorbar(timepoints, means, yerr=[lower_stdevs, stdevs], fmt='o')
+	axs.set_xlabel('num. of generations')
+	fig.suptitle('Mean/Stdev of distances for agents in pool, compared to (unprocessed) target (same file)\nSIZE='+str(poolsize)+' MARGIN='+str(margin)+' MUT. PROB.='+str(mutrate))
+	
+	plt.show()
+
+
+def vals_to_binarystring(vals = [0, 0, 0, 0, 0]):
 	return ''.join((("{0:08b}".format(val)) for val in vals))
 
 # never a '0bXXX' string!

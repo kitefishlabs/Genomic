@@ -39,7 +39,7 @@ DELTA = 7
 
 class GenomicExplorer:
 
-	def __init__(self, anchor, sfilenames, subdir=None, out_dir='out', size=50, margin=10, report_interval=20, mut_prob=0.01, stop_slope=0.1, stop_maxgens=5, rev_flag=False): #, start_state=[1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0]
+	def __init__(self, anchor, sfilenames, subdir=None, out_dir='out', size=50, margin=10, report_interval=20, mut_prob=0.01, stop_slope=0.000001, stop_maxgens=5, rev_flag=False): #, start_state=[1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0]
 				
 		self.anchor = anchor
 		if subdir is not None:
@@ -75,7 +75,8 @@ class GenomicExplorer:
 	def init_population(self, size):
 		self.population = []
 		for n in range(size):
- 			self.population += [Genome()] #random seed
+# 			self.population += [Genome()] #random seed
+			self.population += [Genome(values=[0,0,0,0,0,0,0,0])] #random seed
 		self.population[0] = Genome(values=[0,0,0,0,0,0,0,0])
 		self.analyze_individual(0)
 		self.activate_raw_data(0)
@@ -525,8 +526,8 @@ class Genome:
 	
 	def __repr__(self):
 		#print '1. ', tuple(self.values)
-		#print '2. ', ((self.age, self.edits) + tuple(self.values) + tuple(self.binarystring))
-		return "%9i/%9i || %.6f|%.6f|%.6f|%.6f|%.6f|%.6f|%.6f" % ((self.age, self.edits) + tuple(self.realvalues)) # + tuple(self.binarystring)
+		print '2. ', ((self.age, self.edits) + tuple(self.values) + tuple(self.binarystring))
+		return "%9i/%9i || %.6f|%.6f|%.6f|%.6f|%.6f|%.6f|%.6f|%.6f" % ((self.age, self.edits) + tuple(self.realvalues)) # + tuple(self.binarystring)
 	
 	def mutate(self):
 		pos = random.randint(0,(self.bitlength-1))

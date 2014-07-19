@@ -311,8 +311,8 @@ class GenomicExplorer:
  			if aflag:
  				self.analyze_individual(i)
 				self.activate_raw_data(i)
- 			self.compare_individual_chi_squared(i)
-#			self.compare_individual(i)
+#  			self.compare_individual_chi_squared(i)
+			self.compare_individual(i)
 		print self.dists
 		return self.dists
 	"""

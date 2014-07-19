@@ -5,3 +5,8 @@ snd/md/*
 snd/osc/*
 snd/out/*
 snd/*
+
+*.wav
+json/*
+unused/*
+
